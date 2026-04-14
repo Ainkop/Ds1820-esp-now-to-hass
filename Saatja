@@ -1,0 +1,81 @@
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// 1. Anduri seaded
+#define ONE_WIRE_BUS 4
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+// 2. WiFi kanali seadistus (PEAB olema sama mis vastuvõtjal/ruuteril)
+#define WIFI_CHANNEL 6 
+
+// 3. Andmete struktuur (peab ühtima vastuvõtjaga)
+typedef struct struct_message {
+    float temp;
+} struct_message;
+
+struct_message myData;
+
+// Vastuvõtja aadress (Broadcast saadab kõigile samal kanalil)
+uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+void setup() {
+  Serial.begin(115200);
+
+  // Käivitame anduri
+  sensors.begin();
+
+  // Seadistame WiFi ja kanali
+  WiFi.mode(WIFI_STA);
+  
+  // See rida on kriitiline ESP-NOW ja WiFi koostööks
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(false);
+
+  // Algatame ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Viga ESP-NOW algatamisel");
+    return;
+  }
+
+  // Lisame vastuvõtja (Peer)
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = WIFI_CHANNEL;  
+  peerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Viga peeri lisamisel");
+    return;
+  }
+}
+
+void loop() {
+  // Loeme temperatuuri
+  sensors.requestTemperatures();
+  myData.temp = sensors.getTempCByIndex(0);
+
+  // Kontrollime viga (nt andur lahti tulnud)
+  if (myData.temp == DEVICE_DISCONNECTED_C) {
+    Serial.println("Viga: Andurit ei leitud!");
+  } else {
+    Serial.print("Saadan temperatuuri: ");
+    Serial.println(myData.temp);
+
+    // Saadame andmed
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+    
+    if (result == ESP_OK) {
+      Serial.println("Saadeti edukalt");
+    } else {
+      Serial.println("Viga saatmisel");
+    }
+  }
+
+  // Ootame 1 minut (60000 ms)
+  delay(60000);
+}
