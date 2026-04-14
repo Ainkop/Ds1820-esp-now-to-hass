@@ -1,0 +1,20 @@
+# Vastuvõtja ESPHome konf
+esphome:
+  name: espnow-vastuvotja
+
+esp32:
+  board: esp32dev
+
+# Aktiveerib ESP-NOW toe
+esp32_now:
+
+sensor:
+  - platform: esp32_now
+    # Pane siia SAATJA MAC-aadress (leiad logist)
+    mac_address: 24:0A:C4:XX:XX:XX
+    
+    # See peab klappima sinu saatja 'struct' sisuga
+    # Kuna su saatja saadab ühe 'float' väärtuse, siis:
+    id: ds18b20_temp
+    name: "Välistemperatuur"
+    unit_of_measurement: "°C"
